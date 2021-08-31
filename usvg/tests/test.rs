@@ -124,6 +124,19 @@ test_size!(size_detection_3,
     usvg::Size::new(5.0, 20.0).unwrap()
 );
 
+test_size!(size_detection_4,
+    "<svg xmlns='http://www.w3.org/2000/svg'><circle fill='#F4900C' cx='18' cy='18' r='18'/></svg>",
+    usvg::Size::new(36.0, 36.0).unwrap()
+);
+
+#[test]
+fn viewbox_detection() {
+    use usvg::FuzzyEq;
+    let opt = usvg::Options::default();
+    let tree = usvg::Tree::from_str("<svg xmlns='http://www.w3.org/2000/svg'><circle fill='#F4900C' cx='18' cy='18' r='18'/></svg>", &opt.to_ref()).unwrap();
+    assert!(tree.svg_node().view_box.rect.fuzzy_eq(&usvg::Rect::new(0.0, 0.0, 36.0, 36.0).unwrap()));
+}
+
 macro_rules! test_size_err {
     ($name:ident, $input:expr) => {
         #[test]

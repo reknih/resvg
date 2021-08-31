@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{ImageRendering, Rect, ScreenSize, ShapeRendering, Size, TextRendering};
+use crate::{ImageRendering, ScreenSize, ShapeRendering, Size, TextRendering};
 
 
 /// Image fit options.
@@ -225,7 +225,7 @@ pub enum ViewportIntent {
     /// `width`, or `height` attributes. However, it is possible that the
     /// converted result will not behave the same way as the original SVG when
     /// resized.
-    PresetSize(Rect),
+    PresetSize(Size),
 }
 
 impl Default for ViewportIntent {

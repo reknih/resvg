@@ -211,7 +211,7 @@ fn parse_viewport_fallback(s: &str) -> Result<usvg::ViewportIntent, String> {
 
     Ok(
         usvg::ViewportIntent::PresetSize(
-            usvg::Rect::new(0.0, 0.0, w, h).ok_or_else(|| "invalid viewport size".to_string())?
+            usvg::Size::new(w, h).ok_or_else(|| "invalid viewport size".to_string())?
         )
     )
 }

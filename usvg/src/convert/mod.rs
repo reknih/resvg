@@ -94,7 +94,7 @@ pub fn convert_doc(
     opt: &OptionsRef,
 ) -> Result<tree::Tree, Error> {
     let svg = svg_doc.root_element();
-    let (size, allow_relative) = resolve_svg_size(&svg, opt);
+    let (size, userspace_definition) = resolve_svg_size(&svg, opt);
     let size = size?;
 
     let view_box = tree::ViewBox {
@@ -114,7 +114,7 @@ pub fn convert_doc(
         parent_marker: None,
         fe_image_link: false,
         size,
-        allow_relative,
+        allow_relative: userspace_definition != UserspaceDefinition::Unknown,
         view_box: view_box.rect,
         opt,
     };
@@ -122,6 +122,8 @@ pub fn convert_doc(
     let mut id_generator = NodeIdGenerator::new(svg_doc);
 
     convert_children(svg_doc.root(), &state, &mut id_generator, &mut tree.root(), &mut tree);
+
+
 
     // The `convert_children` method doesn't convert elements inside `defs`
     // and non-graphic elements (like gradients, patters, filters, etc.).
@@ -143,13 +145,37 @@ pub fn convert_doc(
     ungroup_groups(opt, &mut tree);
     remove_unused_defs(&mut tree);
 
+    if userspace_definition != UserspaceDefinition::Complete {
+        let mut right = 0.0;
+        let mut bottom = 0.0;
+
+        for node in tree.root().descendants() {
+            if !tree.is_in_defs(&node) {
+                if let Some(bbox) = node.calculate_bbox() {
+                    if bbox.right() > right {
+                        right = bbox.right();
+                    }
+                    if bbox.bottom() > bottom {
+                        bottom = bbox.bottom();
+                    }
+                }
+            }
+        }
+
+        if let Some(rect) = Rect::new(0.0, 0.0, right, bottom) {
+            tree.set_view_box(rect);
+        }
+
+        tree.set_dimensions(right, bottom);
+    }
+
     Ok(tree)
 }
 
 fn resolve_svg_size(
     svg: &svgtree::Node,
     opt: &OptionsRef,
-) -> (Result<Size, Error>, bool) {
+) -> (Result<Size, Error>, UserspaceDefinition) {
     let mut state = State {
         parent_clip_path: None,
         parent_marker: None,
@@ -166,16 +192,15 @@ fn resolve_svg_size(
 
     let view_box = svg.get_viewbox();
 
-    // This bool gets set to false if the user coordinate system depends on the
-    // viewport dimensions but no fallback size was provided.
-    let mut relative_allowed = true;
+    let mut userspace_mode = UserspaceDefinition::Complete;
 
     if (width.unit == Unit::Percent || height.unit == Unit::Percent) && view_box.is_none() {
         let fallback_size = if let ViewportIntent::PresetSize(r) = opt.viewport_fallback {
+            userspace_mode = UserspaceDefinition::PreferenceBound;
             r
         } else {
-            relative_allowed = false;
-            Rect::new(0.0, 0.0, f64::MAX, f64::MAX).unwrap()
+            userspace_mode = UserspaceDefinition::Unknown;
+            Size::new(f64::MAX, f64::MAX).unwrap()
         };
 
         // Apply the percentages to the fallback size.
@@ -215,7 +240,14 @@ fn resolve_svg_size(
         )
     };
 
-    (size.ok_or(Error::InvalidSize), relative_allowed)
+    (size.ok_or(Error::InvalidSize), userspace_mode)
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum UserspaceDefinition {
+    Complete,
+    PreferenceBound,
+    Unknown,
 }
 
 #[inline(never)]
