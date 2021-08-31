@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{ImageRendering, ShapeRendering, TextRendering, Size, ScreenSize};
+use crate::{ImageRendering, Rect, ScreenSize, ShapeRendering, Size, TextRendering};
 
 
 /// Image fit options.
@@ -121,6 +121,12 @@ pub struct Options {
     /// Default: false
     pub keep_named_groups: bool,
 
+    /// Set the mode for handling coordinate systems defined in terms of
+    /// viewport dimensions.
+    ///
+    /// Default: [`ViewportIntent::Unknown`]
+    pub viewport_fallback: ViewportIntent,
+
     /// When empty, `text` elements will be skipped.
     ///
     /// Default: empty
@@ -141,6 +147,7 @@ impl Default for Options {
             text_rendering: TextRendering::default(),
             image_rendering: ImageRendering::default(),
             keep_named_groups: false,
+            viewport_fallback: ViewportIntent::default(),
             #[cfg(feature = "text")]
             fontdb: fontdb::Database::new(),
         }
@@ -161,6 +168,7 @@ impl Options {
             text_rendering: self.text_rendering,
             image_rendering: self.image_rendering,
             keep_named_groups: self.keep_named_groups,
+            viewport_fallback: self.viewport_fallback,
             #[cfg(feature = "text")]
             fontdb: &self.fontdb,
         }
@@ -183,6 +191,7 @@ pub struct OptionsRef<'a> {
     pub text_rendering: TextRendering,
     pub image_rendering: ImageRendering,
     pub keep_named_groups: bool,
+    pub viewport_fallback: ViewportIntent,
     #[cfg(feature = "text")]
     pub fontdb: &'a fontdb::Database,
 }
@@ -196,5 +205,31 @@ impl OptionsRef<'_> {
             Some(ref dir) => dir.join(rel_path),
             None => rel_path.into(),
         }
+    }
+}
+
+/// Way to handle missing information about the viewport dimensions.
+#[derive(Copy, Clone, Debug)]
+pub enum ViewportIntent {
+    /// The viewport size is unknown upon conversion to Micro SVG or only
+    /// viewport-size independant SVGs should be produced.
+    ///
+    /// The conversion will not contain elements with relative lengths if there
+    /// is no `viewBox` and the `width` or `height` attributes are missing or
+    /// only specified as percentages.
+    Unknown,
+    /// The viewport size is known and relative dimensions will be resolved with
+    /// respect to it.
+    ///
+    /// Using this variant, conversion cannot fail due to missing `viewBox`,
+    /// `width`, or `height` attributes. However, it is possible that the
+    /// converted result will not behave the same way as the original SVG when
+    /// resized.
+    PresetSize(Rect),
+}
+
+impl Default for ViewportIntent {
+    fn default() -> ViewportIntent {
+        ViewportIntent::Unknown
     }
 }

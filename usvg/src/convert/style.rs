@@ -66,7 +66,7 @@ pub fn resolve_stroke(
     let stroke = tree::Stroke {
         paint,
         dasharray: conv_dasharray(node, state),
-        dashoffset: node.resolve_length(AId::StrokeDashoffset, state, 0.0) as f32,
+        dashoffset: try_opt_warn_or!(node.resolve_length(AId::StrokeDashoffset, state, 0.0), None, "Invalid stroke dash offset. Skipping.") as f32,
         miterlimit,
         opacity: sub_opacity * node.find_attribute(AId::StrokeOpacity).unwrap_or_default(),
         width: tree::StrokeWidth::new(width),

@@ -7,7 +7,7 @@ use std::hash::{Hash, Hasher};
 
 use svgtypes::Length;
 
-use crate::{svgtree, tree, tree::prelude::*, Error};
+use crate::{svgtree, tree, tree::prelude::*, Error, ViewportIntent};
 
 mod clip;
 mod filter;
@@ -38,6 +38,7 @@ pub struct State<'a> {
     fe_image_link: bool,
     size: Size,
     view_box: Rect,
+    allow_relative: bool,
     opt: &'a OptionsRef<'a>,
 }
 
@@ -93,7 +94,9 @@ pub fn convert_doc(
     opt: &OptionsRef,
 ) -> Result<tree::Tree, Error> {
     let svg = svg_doc.root_element();
-    let size = resolve_svg_size(&svg, opt)?;
+    let (size, allow_relative) = resolve_svg_size(&svg, opt);
+    let size = size?;
+
     let view_box = tree::ViewBox {
         rect: svg.get_viewbox().unwrap_or_else(|| size.to_rect(0.0, 0.0)),
         aspect: svg.attribute(AId::PreserveAspectRatio).unwrap_or_default(),
@@ -111,6 +114,7 @@ pub fn convert_doc(
         parent_marker: None,
         fe_image_link: false,
         size,
+        allow_relative,
         view_box: view_box.rect,
         opt,
     };
@@ -145,26 +149,43 @@ pub fn convert_doc(
 fn resolve_svg_size(
     svg: &svgtree::Node,
     opt: &OptionsRef,
-) -> Result<Size, Error> {
+) -> (Result<Size, Error>, bool) {
     let mut state = State {
         parent_clip_path: None,
         parent_marker: None,
         fe_image_link: false,
         size: Size::new(100.0, 100.0).unwrap(),
+        allow_relative: true,
         view_box: Rect::new(0.0, 0.0, 100.0, 100.0).unwrap(),
         opt,
     };
 
     let def = Length::new(100.0, Unit::Percent);
-    let width: Length = svg.attribute(AId::Width).unwrap_or(def);
-    let height: Length = svg.attribute(AId::Height).unwrap_or(def);
+    let mut width: Length = svg.attribute(AId::Width).unwrap_or(def);
+    let mut height: Length = svg.attribute(AId::Height).unwrap_or(def);
 
     let view_box = svg.get_viewbox();
 
+    // This bool gets set to false if the user coordinate system depends on the
+    // viewport dimensions but no fallback size was provided.
+    let mut relative_allowed = true;
+
     if (width.unit == Unit::Percent || height.unit == Unit::Percent) && view_box.is_none() {
-        // TODO: it this case we should detect the bounding box of all elements,
-        //       which is currently impossible
-        return Err(Error::InvalidSize);
+        let fallback_size = if let ViewportIntent::PresetSize(r) = opt.viewport_fallback {
+            r
+        } else {
+            relative_allowed = false;
+            Rect::new(0.0, 0.0, f64::MAX, f64::MAX).unwrap()
+        };
+
+        // Apply the percentages to the fallback size.
+        if width.unit == Unit::Percent {
+            width = Length::new((width.number / 100.0) * fallback_size.width(), Unit::None);
+        }
+
+        if height.unit == Unit::Percent {
+            height = Length::new((height.number / 100.0) * fallback_size.height(), Unit::None);
+        }
     }
 
     let size = if let Some(vbox) = view_box {
@@ -173,24 +194,28 @@ fn resolve_svg_size(
         let w = if width.unit == Unit::Percent {
             vbox.width() * (width.number / 100.0)
         } else {
-            svg.convert_user_length(AId::Width, &state, def)
+            // Unwrap is safe here because this can only be `None` if the unit
+            // is `Unit::Percent`.
+            svg.convert_user_length(AId::Width, &state, def).unwrap()
         };
 
         let h = if height.unit == Unit::Percent {
             vbox.height() * (height.number / 100.0)
         } else {
-            svg.convert_user_length(AId::Height, &state, def)
+            svg.convert_user_length(AId::Height, &state, def).unwrap()
         };
 
         Size::new(w, h)
     } else {
+        // The unwrap here is safe as well since we assured ourselves above that
+        // the width and height would not be `Unit::Percent`.
         Size::new(
-            svg.convert_user_length(AId::Width, &state, def),
-            svg.convert_user_length(AId::Height, &state, def),
+            units::convert_length(width, *svg, AId::Width, tree::Units::UserSpaceOnUse, &state).unwrap(),
+            units::convert_length(height, *svg, AId::Height, tree::Units::UserSpaceOnUse, &state).unwrap(),
         )
     };
 
-    size.ok_or(Error::InvalidSize)
+    (size.ok_or(Error::InvalidSize), relative_allowed)
 }
 
 #[inline(never)]
@@ -833,17 +858,17 @@ fn convert_path(
 
 
 pub trait SvgNodeExt {
-    fn resolve_length(&self, aid: AId, state: &State, def: f64) -> f64;
+    fn resolve_length(&self, aid: AId, state: &State, def: f64) -> Option<f64>;
     fn resolve_valid_length(&self, aid: AId, state: &State, def: f64) -> Option<f64>;
-    fn convert_length(&self, aid: AId, object_units: tree::Units, state: &State, def: Length) -> f64;
+    fn convert_length(&self, aid: AId, object_units: tree::Units, state: &State, def: Length) -> Option<f64>;
     fn try_convert_length(&self, aid: AId, object_units: tree::Units, state: &State) -> Option<f64>;
-    fn convert_user_length(&self, aid: AId, state: &State, def: Length) -> f64;
+    fn convert_user_length(&self, aid: AId, state: &State, def: Length) -> Option<f64>;
     fn try_convert_user_length(&self, aid: AId, state: &State) -> Option<f64>;
     fn is_visible_element(&self, opt: &OptionsRef) -> bool;
 }
 
 impl<'a> SvgNodeExt for svgtree::Node<'a> {
-    fn resolve_length(&self, aid: AId, state: &State, def: f64) -> f64 {
+    fn resolve_length(&self, aid: AId, state: &State, def: f64) -> Option<f64> {
         debug_assert!(!matches!(aid, AId::BaselineShift | AId::FontSize),
                       "{} cannot be resolved via this function", aid);
 
@@ -853,23 +878,23 @@ impl<'a> SvgNodeExt for svgtree::Node<'a> {
             }
         }
 
-        def
+        Some(def)
     }
 
     fn resolve_valid_length(&self, aid: AId, state: &State, def: f64) -> Option<f64> {
         let n = self.resolve_length(aid, state, def);
-        if n.is_valid_length() { Some(n) } else { None }
+        n.filter(|n| n.is_valid_length())
     }
 
-    fn convert_length(&self, aid: AId, object_units: tree::Units, state: &State, def: Length) -> f64 {
+    fn convert_length(&self, aid: AId, object_units: tree::Units, state: &State, def: Length) -> Option<f64> {
         units::convert_length(self.attribute(aid).unwrap_or(def), *self, aid, object_units, state)
     }
 
     fn try_convert_length(&self, aid: AId, object_units: tree::Units, state: &State) -> Option<f64> {
-        Some(units::convert_length(self.attribute(aid)?, *self, aid, object_units, state))
+        units::convert_length(self.attribute(aid)?, *self, aid, object_units, state)
     }
 
-    fn convert_user_length(&self, aid: AId, state: &State, def: Length) -> f64 {
+    fn convert_user_length(&self, aid: AId, state: &State, def: Length) -> Option<f64> {
         self.convert_length(aid, tree::Units::UserSpaceOnUse, state, def)
     }
 

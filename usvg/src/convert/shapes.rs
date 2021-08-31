@@ -33,8 +33,19 @@ fn convert_rect(
     state: &State,
 ) -> Option<tree::SharedPathData> {
     // 'width' and 'height' attributes must be positive and non-zero.
-    let width  = node.convert_user_length(AId::Width, state, Length::zero());
-    let height = node.convert_user_length(AId::Height, state, Length::zero());
+    let width  = try_opt_warn_or!(
+        node.convert_user_length(AId::Width, state, Length::zero()),
+        None,
+        "Rect '{}' has a relative 'width' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let height = try_opt_warn_or!(
+        node.convert_user_length(AId::Height, state, Length::zero()),
+        None,
+        "Rect '{}' has a relative 'height' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+
     if !width.is_valid_length() {
         warn!("Rect '{}' has an invalid 'width' value. Skipped.", node.element_id());
         return None;
@@ -44,10 +55,24 @@ fn convert_rect(
         return None;
     }
 
-    let x = node.convert_user_length(AId::X, state, Length::zero());
-    let y = node.convert_user_length(AId::Y, state, Length::zero());
-
-    let (mut rx, mut ry) = resolve_rx_ry(node, state);
+    let x = try_opt_warn_or!(
+        node.convert_user_length(AId::X, state, Length::zero()),
+        None,
+        "Rect '{}' has a relative 'x' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let y = try_opt_warn_or!(
+        node.convert_user_length(AId::Y, state, Length::zero()),
+        None,
+        "Rect '{}' has a relative 'y' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let (mut rx, mut ry) = try_opt_warn_or!(
+        resolve_rx_ry(node, state),
+        None,
+        "Rect '{}' has a relative 'rx' or 'ry' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
 
     // Clamp rx/ry to the half of the width/height.
     //
@@ -85,7 +110,7 @@ fn convert_rect(
 fn resolve_rx_ry(
     node: svgtree::Node,
     state: &State,
-) -> (f64, f64) {
+) -> Option<(f64, f64)> {
     let mut rx_opt = node.attribute::<Length>(AId::Rx);
     let mut ry_opt = node.attribute::<Length>(AId::Ry);
 
@@ -109,20 +134,40 @@ fn resolve_rx_ry(
         (Some(rx), Some(ry)) => (rx, ry),
     };
 
-    let rx = units::convert_length(rx, node, AId::Rx, tree::Units::UserSpaceOnUse, state);
-    let ry = units::convert_length(ry, node, AId::Ry, tree::Units::UserSpaceOnUse, state);
+    let rx = units::convert_length(rx, node, AId::Rx, tree::Units::UserSpaceOnUse, state)?;
+    let ry = units::convert_length(ry, node, AId::Ry, tree::Units::UserSpaceOnUse, state)?;
 
-    (rx, ry)
+    Some((rx, ry))
 }
 
 fn convert_line(
     node: svgtree::Node,
     state: &State,
 ) -> Option<tree::SharedPathData> {
-    let x1 = node.convert_user_length(AId::X1, state, Length::zero());
-    let y1 = node.convert_user_length(AId::Y1, state, Length::zero());
-    let x2 = node.convert_user_length(AId::X2, state, Length::zero());
-    let y2 = node.convert_user_length(AId::Y2, state, Length::zero());
+    let x1 = try_opt_warn_or!(
+        node.convert_user_length(AId::X1, state, Length::zero()),
+        None,
+        "Line '{}' has a relative 'x1' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let y1 = try_opt_warn_or!(
+        node.convert_user_length(AId::Y1, state, Length::zero()),
+        None,
+        "Line '{}' has a relative 'y1' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let x2 = try_opt_warn_or!(
+        node.convert_user_length(AId::X2, state, Length::zero()),
+        None,
+        "Line '{}' has a relative 'x2' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let y2 = try_opt_warn_or!(
+        node.convert_user_length(AId::Y2, state, Length::zero()),
+        None,
+        "Line '{}' has a relative 'y1' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
 
     let mut path = tree::PathData::new();
     path.push_move_to(x1, y1);
@@ -179,9 +224,24 @@ fn convert_circle(
     node: svgtree::Node,
     state: &State,
 ) -> Option<tree::SharedPathData> {
-    let cx = node.convert_user_length(AId::Cx, state, Length::zero());
-    let cy = node.convert_user_length(AId::Cy, state, Length::zero());
-    let r  = node.convert_user_length(AId::R,  state, Length::zero());
+    let cx = try_opt_warn_or!(
+        node.convert_user_length(AId::Cx, state, Length::zero()),
+        None,
+        "Circle '{}' has a relative 'cx' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let cy = try_opt_warn_or!(
+        node.convert_user_length(AId::Cy, state, Length::zero()),
+        None,
+        "Circle '{}' has a relative 'cy' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let r  = try_opt_warn_or!(
+        node.convert_user_length(AId::R,  state, Length::zero()),
+        None,
+        "Circle '{}' has a relative 'r' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
 
     if !r.is_valid_length() {
         warn!("Circle '{}' has an invalid 'r' value. Skipped.", node.element_id());
@@ -195,9 +255,20 @@ fn convert_ellipse(
     node: svgtree::Node,
     state: &State,
 ) -> Option<tree::SharedPathData> {
-    let cx = node.convert_user_length(AId::Cx, state, Length::zero());
-    let cy = node.convert_user_length(AId::Cy, state, Length::zero());
-    let (rx, ry) = resolve_rx_ry(node, state);
+    let cx = try_opt_warn_or!(
+        node.convert_user_length(AId::Cx, state, Length::zero()),
+        None,
+        "Ellipse '{}' has a relative 'cx' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+    let cy = try_opt_warn_or!(
+        node.convert_user_length(AId::Cy, state, Length::zero()),
+        None,
+        "Ellipse '{}' has a relative 'cy' value, but user space boundary is unknown. Skipped.",
+        node.element_id(),
+    );
+
+    let (rx, ry) = resolve_rx_ry(node, state)?;
 
     if !rx.is_valid_length() {
         warn!("Ellipse '{}' has an invalid 'rx' value. Skipped.", node.element_id());

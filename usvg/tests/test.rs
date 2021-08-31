@@ -134,8 +134,5 @@ macro_rules! test_size_err {
     };
 }
 
-test_size_err!(size_detection_err_1,
-    "<svg width='50%' height='100%' xmlns='http://www.w3.org/2000/svg'>");
-
-test_size_err!(size_detection_err_2,
+test_size_err!(size_detection_err,
     "<svg width='0' height='0' viewBox='0 0 10 20' xmlns='http://www.w3.org/2000/svg'>");

@@ -32,7 +32,10 @@ pub fn convert(
     {
         let x = node.convert_user_length(AId::X, state, Length::zero());
         let y = node.convert_user_length(AId::Y, state, Length::zero());
-        new_ts.translate(x, y);
+
+        if let (Some(x), Some(y)) = (x, y) {
+            new_ts.translate(x, y);
+        }
     }
 
     let linked_to_symbol = child.tag_name() == Some(EId::Symbol);
@@ -95,7 +98,10 @@ pub fn convert_svg(
     {
         let x = node.convert_user_length(AId::X, state, Length::zero());
         let y = node.convert_user_length(AId::Y, state, Length::zero());
-        new_ts.translate(x, y);
+
+        if let (Some(x), Some(y)) = (x, y) {
+            new_ts.translate(x, y);
+        }
     }
 
     if let Some(ts) = viewbox_transform(node, node, state) {
@@ -201,10 +207,10 @@ fn get_clip_rect(
     }
 
     let (x, y, w, h) = {
-        let x = use_node.convert_user_length(AId::X, state, Length::zero());
-        let y = use_node.convert_user_length(AId::Y, state, Length::zero());
-        let w = use_node.convert_user_length(AId::Width, state, Length::new(100.0, Unit::Percent));
-        let h = use_node.convert_user_length(AId::Height, state, Length::new(100.0, Unit::Percent));
+        let x = use_node.convert_user_length(AId::X, state, Length::zero())?;
+        let y = use_node.convert_user_length(AId::Y, state, Length::zero())?;
+        let w = use_node.convert_user_length(AId::Width, state, Length::new(100.0, Unit::Percent))?;
+        let h = use_node.convert_user_length(AId::Height, state, Length::new(100.0, Unit::Percent))?;
         (x, y, w, h)
     };
 
@@ -228,8 +234,8 @@ fn viewbox_transform(
 ) -> Option<tree::Transform> {
     let size = {
         let def = Length::new(100.0, Unit::Percent);
-        let w = node.convert_user_length(AId::Width, state, def);
-        let h = node.convert_user_length(AId::Height, state, def);
+        let w = node.convert_user_length(AId::Width, state, def)?;
+        let h = node.convert_user_length(AId::Height, state, def)?;
         Size::new(w, h)
     }?;
 

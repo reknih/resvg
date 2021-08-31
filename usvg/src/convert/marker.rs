@@ -451,10 +451,10 @@ fn convert_rect(
     state: &State,
 ) -> Option<Rect> {
     Rect::new(
-        node.convert_user_length(AId::RefX, state, Length::zero()),
-        node.convert_user_length(AId::RefY, state, Length::zero()),
-        node.convert_user_length(AId::MarkerWidth, state, Length::new_number(3.0)),
-        node.convert_user_length(AId::MarkerHeight, state, Length::new_number(3.0)),
+        node.convert_user_length(AId::RefX, state, Length::zero())?,
+        node.convert_user_length(AId::RefY, state, Length::zero())?,
+        node.convert_user_length(AId::MarkerWidth, state, Length::new_number(3.0))?,
+        node.convert_user_length(AId::MarkerHeight, state, Length::new_number(3.0))?,
     )
 }
 

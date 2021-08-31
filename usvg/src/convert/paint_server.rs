@@ -61,10 +61,10 @@ fn convert_linear(
     tree.append_to_defs(
         tree::NodeKind::LinearGradient(tree::LinearGradient {
             id: node.element_id().to_string(),
-            x1: resolve_number(node, AId::X1, units, state, Length::zero()),
-            y1: resolve_number(node, AId::Y1, units, state, Length::zero()),
-            x2: resolve_number(node, AId::X2, units, state, Length::new(100.0, Unit::Percent)),
-            y2: resolve_number(node, AId::Y2, units, state, Length::zero()),
+            x1: resolve_number(node, AId::X1, units, state, Length::zero())?,
+            y1: resolve_number(node, AId::Y1, units, state, Length::zero())?,
+            x2: resolve_number(node, AId::X2, units, state, Length::new(100.0, Unit::Percent))?,
+            y2: resolve_number(node, AId::Y2, units, state, Length::zero())?,
             base: tree::BaseGradient {
                 units,
                 transform,
@@ -92,7 +92,7 @@ fn convert_radial(
     }
 
     let units = convert_units(node, AId::GradientUnits, tree::Units::ObjectBoundingBox);
-    let r = resolve_number(node, AId::R, units, state, Length::new(50.0, Unit::Percent));
+    let r = resolve_number(node, AId::R, units, state, Length::new(50.0, Unit::Percent))?;
 
     // 'A value of zero will cause the area to be painted as a single color
     // using the color and opacity of the last gradient stop.'
@@ -107,10 +107,10 @@ fn convert_radial(
     }
 
     let spread_method = convert_spread_method(node);
-    let cx = resolve_number(node, AId::Cx, units, state, Length::new(50.0, Unit::Percent));
-    let cy = resolve_number(node, AId::Cy, units, state, Length::new(50.0, Unit::Percent));
-    let fx = resolve_number(node, AId::Fx, units, state, Length::new_number(cx));
-    let fy = resolve_number(node, AId::Fy, units, state, Length::new_number(cy));
+    let cx = resolve_number(node, AId::Cx, units, state, Length::new(50.0, Unit::Percent))?;
+    let cy = resolve_number(node, AId::Cy, units, state, Length::new(50.0, Unit::Percent))?;
+    let fx = resolve_number(node, AId::Fx, units, state, Length::new_number(cx))?;
+    let fy = resolve_number(node, AId::Fy, units, state, Length::new_number(cy))?;
     let (fx, fy) = prepare_focal(cx, cy, r, fx, fy);
     let transform = resolve_attr(node, AId::GradientTransform)
         .attribute(AId::GradientTransform).unwrap_or_default();
@@ -164,11 +164,13 @@ fn convert_pattern(
     let transform = resolve_attr(node, AId::PatternTransform)
         .attribute(AId::PatternTransform).unwrap_or_default();
 
+    // Unwrapping with `-1.0` here because that will make the `Rect` constructor
+    // return `None`.
     let rect = Rect::new(
-        resolve_number(node, AId::X, units, state, Length::zero()),
-        resolve_number(node, AId::Y, units, state, Length::zero()),
-        resolve_number(node, AId::Width, units, state, Length::zero()),
-        resolve_number(node, AId::Height, units, state, Length::zero()),
+        resolve_number(node, AId::X, units, state, Length::zero()).unwrap_or(-1.0),
+        resolve_number(node, AId::Y, units, state, Length::zero()).unwrap_or(-1.0),
+        resolve_number(node, AId::Width, units, state, Length::zero()).unwrap_or(-1.0),
+        resolve_number(node, AId::Height, units, state, Length::zero()).unwrap_or(-1.0),
     );
     let rect = try_opt_warn_or!(
         rect, None,
@@ -373,7 +375,7 @@ fn convert_stops(grad: svgtree::Node) -> Vec<tree::Stop> {
 #[inline(never)]
 pub fn resolve_number(
     node: svgtree::Node, name: AId, units: tree::Units, state: &State, def: Length
-) -> f64 {
+) -> Option<f64> {
     resolve_attr(node, name).convert_length(name, units, state, def)
 }
 

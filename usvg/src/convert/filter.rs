@@ -23,10 +23,10 @@ pub fn convert(
     let primitive_units = convert_units(node, AId::PrimitiveUnits, tree::Units::UserSpaceOnUse);
 
     let rect = Rect::new(
-        resolve_number(node, AId::X, units, state, Length::new(-10.0, Unit::Percent)),
-        resolve_number(node, AId::Y, units, state, Length::new(-10.0, Unit::Percent)),
-        resolve_number(node, AId::Width, units, state, Length::new(120.0, Unit::Percent)),
-        resolve_number(node, AId::Height, units, state, Length::new(120.0, Unit::Percent)),
+        resolve_number(node, AId::X, units, state, Length::new(-10.0, Unit::Percent)).unwrap_or(-1.0),
+        resolve_number(node, AId::Y, units, state, Length::new(-10.0, Unit::Percent)).unwrap_or(-1.0),
+        resolve_number(node, AId::Width, units, state, Length::new(120.0, Unit::Percent)).unwrap_or(-1.0),
+        resolve_number(node, AId::Height, units, state, Length::new(120.0, Unit::Percent)).unwrap_or(-1.0),
     );
     let rect = try_opt_warn_or!(
         rect, None,
@@ -92,9 +92,15 @@ fn collect_children(
 
     for child in filter.children() {
         let kind = match try_opt_continue!(child.tag_name()) {
-            EId::FeDropShadow => convert_fe_drop_shadow(child, &primitives, &state),
+            EId::FeDropShadow => try_opt_warn_continue!(
+                convert_fe_drop_shadow(child, &primitives, &state),
+                "Drop shadow has invalid parameters. Skipped."
+            ),
             EId::FeGaussianBlur => convert_fe_gaussian_blur(child, &primitives),
-            EId::FeOffset => convert_fe_offset(child, &primitives, state),
+            EId::FeOffset => try_opt_warn_continue!(
+                convert_fe_offset(child, &primitives, state),
+                "Drop shadow has invalid parameters. Skipped."
+            ),
             EId::FeBlend => convert_fe_blend(child, &primitives),
             EId::FeFlood => convert_fe_flood(child),
             EId::FeComposite => convert_fe_composite(child, &primitives),
@@ -147,18 +153,18 @@ fn convert_fe_drop_shadow(
     fe: svgtree::Node,
     primitives: &[tree::FilterPrimitive],
     state: &State,
-) -> tree::FilterKind {
+) -> Option<tree::FilterKind> {
     let (std_dev_x, std_dev_y) = convert_std_dev_attr(fe, "2 2");
 
-    tree::FilterKind::FeDropShadow(tree::FeDropShadow {
+    Some(tree::FilterKind::FeDropShadow(tree::FeDropShadow {
         input: resolve_input(fe, AId::In, primitives),
-        dx: fe.convert_user_length(AId::Dx, state, Length::new_number(2.0)),
-        dy: fe.convert_user_length(AId::Dy, state, Length::new_number(2.0)),
+        dx: fe.convert_user_length(AId::Dx, state, Length::new_number(2.0))?,
+        dy: fe.convert_user_length(AId::Dy, state, Length::new_number(2.0))?,
         std_dev_x: std_dev_x.into(),
         std_dev_y: std_dev_y.into(),
         color: fe.attribute(AId::FloodColor).unwrap_or_else(tree::Color::black),
         opacity: fe.attribute(AId::FloodOpacity).unwrap_or_default(),
-    })
+    }))
 }
 
 fn convert_fe_gaussian_blur(
@@ -199,12 +205,12 @@ fn convert_fe_offset(
     fe: svgtree::Node,
     primitives: &[tree::FilterPrimitive],
     state: &State,
-) -> tree::FilterKind {
-    tree::FilterKind::FeOffset(tree::FeOffset {
+) -> Option<tree::FilterKind> {
+    Some(tree::FilterKind::FeOffset(tree::FeOffset {
         input: resolve_input(fe, AId::In, primitives),
-        dx: fe.convert_user_length(AId::Dx, state, Length::zero()),
-        dy: fe.convert_user_length(AId::Dy, state, Length::zero()),
-    })
+        dx: fe.convert_user_length(AId::Dx, state, Length::zero())?,
+        dy: fe.convert_user_length(AId::Dy, state, Length::zero())?,
+    }))
 }
 
 fn convert_fe_blend(

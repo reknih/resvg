@@ -13,10 +13,10 @@ pub fn convert_length(
     aid: AId,
     object_units: tree::Units,
     state: &State,
-) -> f64 {
+) -> Option<f64> {
     let dpi = state.opt.dpi;
     let n = length.number;
-    match length.unit {
+    Some(match length.unit {
         Unit::None | Unit::Px => n,
         Unit::Em => n * resolve_font_size(node, state),
         Unit::Ex => n * resolve_font_size(node, state) / 2.0,
@@ -29,6 +29,10 @@ pub fn convert_length(
             if object_units == tree::Units::ObjectBoundingBox {
                 length.number / 100.0
             } else {
+                if !state.allow_relative {
+                    return None;
+                }
+
                 let view_box = state.view_box;
 
                 match aid {
@@ -49,7 +53,7 @@ pub fn convert_length(
                 }
             }
         }
-    }
+    })
 }
 
 #[inline(never)]
@@ -62,7 +66,7 @@ pub fn convert_list(
         let mut num_list = Vec::new();
         for length in svgtypes::LengthListParser::from(text) {
             if let Ok(length) = length {
-                num_list.push(convert_length(length, node, aid, tree::Units::UserSpaceOnUse, state));
+                num_list.push(convert_length(length, node, aid, tree::Units::UserSpaceOnUse, state)?);
             }
         }
 

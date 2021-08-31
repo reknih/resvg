@@ -30,10 +30,10 @@ pub fn convert(
     let content_units = node.attribute(AId::MaskContentUnits).unwrap_or(tree::Units::UserSpaceOnUse);
 
     let rect = Rect::new(
-        node.convert_length(AId::X, units, state, Length::new(-10.0, Unit::Percent)),
-        node.convert_length(AId::Y, units, state, Length::new(-10.0, Unit::Percent)),
-        node.convert_length(AId::Width, units, state, Length::new(120.0, Unit::Percent)),
-        node.convert_length(AId::Height, units, state, Length::new(120.0, Unit::Percent)),
+        node.convert_length(AId::X, units, state, Length::new(-10.0, Unit::Percent))?,
+        node.convert_length(AId::Y, units, state, Length::new(-10.0, Unit::Percent))?,
+        node.convert_length(AId::Width, units, state, Length::new(120.0, Unit::Percent))?,
+        node.convert_length(AId::Height, units, state, Length::new(120.0, Unit::Percent))?,
     );
     let rect = try_opt_warn_or!(
         rect, None,

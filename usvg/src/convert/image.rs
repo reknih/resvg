@@ -27,10 +27,10 @@ pub fn convert(
         .unwrap_or(state.opt.image_rendering);
 
     let rect = Rect::new(
-        node.convert_user_length(AId::X, state, Length::zero()),
-        node.convert_user_length(AId::Y, state, Length::zero()),
-        node.convert_user_length(AId::Width, state, Length::zero()),
-        node.convert_user_length(AId::Height, state, Length::zero()),
+        node.convert_user_length(AId::X, state, Length::zero()).unwrap_or(-1.0),
+        node.convert_user_length(AId::Y, state, Length::zero()).unwrap_or(-1.0),
+        node.convert_user_length(AId::Width, state, Length::zero()).unwrap_or(-1.0),
+        node.convert_user_length(AId::Height, state, Length::zero()).unwrap_or(-1.0),
     );
     let rect = try_opt_warn!(rect, "Image has an invalid size. Skipped.");
 

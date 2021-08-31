@@ -154,7 +154,10 @@ OPTIONS:
                                 Otherwise, text elements will not be processes
   --list-fonts                  Lists successfully loaded font faces.
                                 Useful for debugging
-
+  --fallback-size SIZE,SIZE     Sets the fallback width and height for parsing
+                                of SVG files with no viewBox and relative width
+                                and height attributes. The values must be comma
+                                separated but must not contain a space.
 
   --query-all                   Queries all valid SVG ids with bounding boxes
   --export-id ID                Renders an object only with a specified ID
@@ -197,6 +200,7 @@ struct CliArgs {
     font_dirs: Vec<path::PathBuf>,
     skip_system_fonts: bool,
     list_fonts: bool,
+    viewport_fallback: usvg::ViewportIntent,
 
     query_all: bool,
     export_id: Option<String>,
@@ -250,6 +254,7 @@ fn collect_args() -> Result<CliArgs, pico_args::Error> {
         font_dirs:          input.values_from_str("--use-fonts-dir")?,
         skip_system_fonts:  input.contains("--skip-system-fonts"),
         list_fonts:         input.contains("--list-fonts"),
+        viewport_fallback:  input.opt_value_from_fn("--fallback-size", parse_viewport_fallback)?.unwrap_or(usvg::ViewportIntent::Unknown),
 
         query_all:          input.contains("--query-all"),
         export_id:          input.opt_value_from_str("--export-id")?,
@@ -304,6 +309,23 @@ fn parse_font_size(s: &str) -> Result<u32, String> {
     } else {
         Err("font size out of bounds".to_string())
     }
+}
+
+fn parse_viewport_fallback(s: &str) -> Result<usvg::ViewportIntent, String> {
+    let s: Vec<&str> = s.split(',').collect();
+
+    if s.len() != 2 {
+        return Err("fallback size must be two values seperated by comma, no space".to_string());
+    }
+
+    let w: f64 = s[0].parse().map_err(|_| "invalid number")?;
+    let h: f64 = s[1].parse().map_err(|_| "invalid number")?;
+
+    Ok(
+        usvg::ViewportIntent::PresetSize(
+            usvg::Rect::new(0.0, 0.0, w, h).ok_or_else(|| "invalid viewport size".to_string())?
+        )
+    )
 }
 
 fn parse_languages(s: &str) -> Result<Vec<String>, String> {
@@ -405,6 +427,7 @@ fn parse_args() -> Result<Args, String> {
         text_rendering: args.text_rendering,
         image_rendering: args.image_rendering,
         keep_named_groups,
+        viewport_fallback: args.viewport_fallback,
         fontdb,
     };
 

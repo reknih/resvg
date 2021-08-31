@@ -237,19 +237,28 @@ fn collect_text_chunks_impl(
             }
         };
 
-        let span = TextSpan {
-            start: 0,
-            end: 0,
-            fill: style::resolve_fill(parent, true, state, id_generator, tree),
-            stroke: style::resolve_stroke(parent, true, state, id_generator, tree),
-            font,
-            font_size,
-            small_caps: parent.find_attribute(AId::FontVariant) == Some("small-caps"),
-            decoration: resolve_decoration(text_node, parent, state, id_generator, tree),
-            visibility: parent.find_attribute(AId::Visibility).unwrap_or_default(),
-            baseline_shift: resolve_baseline_shift(parent, state),
-            letter_spacing: parent.resolve_length(AId::LetterSpacing, state, 0.0),
-            word_spacing: parent.resolve_length(AId::WordSpacing, state, 0.0),
+        let letter_spacing = parent.resolve_length(AId::LetterSpacing, state, 0.0);
+        let word_spacing = parent.resolve_length(AId::WordSpacing, state, 0.0);
+        let baseline_shift = resolve_baseline_shift(parent, state);
+
+        let span = if let (Some(letter_spacing), Some(word_spacing), Some(baseline_shift)) = (letter_spacing, word_spacing, baseline_shift) {
+            TextSpan {
+                start: 0,
+                end: 0,
+                fill: style::resolve_fill(parent, true, state, id_generator, tree),
+                stroke: style::resolve_stroke(parent, true, state, id_generator, tree),
+                font,
+                font_size,
+                small_caps: parent.find_attribute(AId::FontVariant) == Some("small-caps"),
+                decoration: resolve_decoration(text_node, parent, state, id_generator, tree),
+                visibility: parent.find_attribute(AId::Visibility).unwrap_or_default(),
+                baseline_shift,
+                letter_spacing,
+                word_spacing,
+            }
+        } else {
+            warn!("Invalid letter spacing, word spacing, or baseline shift. Skipped.");
+            return;
         };
 
         let mut is_new_span = true;
@@ -345,7 +354,10 @@ fn resolve_text_flow(
         let path_len = path.length();
         path_len * (start_offset.number / 100.0)
     } else {
-        node.resolve_length(AId::StartOffset, state, 0.0)
+        node.resolve_length(AId::StartOffset, state, 0.0).or_else(|| {
+            warn!("Invalid start offset. Skipped.");
+            None
+        })?
     };
 
 
@@ -679,7 +691,7 @@ fn conv_text_decoration2(tspan: svgtree::Node) -> TextDecorationTypes {
 fn resolve_baseline_shift(
     node: svgtree::Node,
     state: &State,
-) -> f64 {
+) -> Option<f64> {
     let mut shift = 0.0;
     let nodes: Vec<_> = node.ancestors().take_while(|n| !n.has_tag_name(EId::Text)).collect();
     for n in nodes.iter().rev().cloned() {
@@ -689,7 +701,7 @@ fn resolve_baseline_shift(
             } else {
                 shift += units::convert_length(
                     len, n, AId::BaselineShift, tree::Units::ObjectBoundingBox, state,
-                );
+                )?;
             }
         } else if let Some(s) = n.attribute(AId::BaselineShift) {
             match s {
@@ -711,7 +723,7 @@ fn resolve_baseline_shift(
         }
     }
 
-    shift
+    Some(shift)
 }
 
 fn resolve_font_weight(node: svgtree::Node) -> fontdb::Weight {

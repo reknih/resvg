@@ -122,6 +122,28 @@ macro_rules! try_opt_warn {
     };
 }
 
+/// Unwraps `Option` and invokes `continue` on `None` with a warning.
+macro_rules! try_opt_warn_continue {
+    ($task:expr, $msg:expr) => {
+        match $task {
+            Some(v) => v,
+            None => {
+                log::warn!($msg);
+                continue;
+            }
+        }
+    };
+    ($task:expr, $fmt:expr, $($arg:tt)*) => {
+        match $task {
+            Some(v) => v,
+            None => {
+                log::warn!($fmt, $($arg)*);
+                continue;
+            }
+        }
+    };
+}
+
 /// Unwraps `Option` and invokes `return $ret` on `None` with a warning.
 macro_rules! try_opt_warn_or {
     ($task:expr, $ret:expr, $msg:expr) => {
